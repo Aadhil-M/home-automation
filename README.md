@@ -122,7 +122,7 @@ For detailed topic documentation, see MQTT_TOPICS.md.
 
 ### Mobile View
 
-![Mobile Dashboard](docs/images/mobil_dashboard.jpg)
+![Mobile Dashboard](docs/images/mobile_dashboard.png)
 
 > Update the filenames above to match the actual images in `docs/images`.
 
