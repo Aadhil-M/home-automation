@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Smart Home Dashboard</title>
+<script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+<style>
+@media (max-width: 768px){
+
+    .header{
+        flex-direction:column;
+        align-items:flex-start;
+        gap:15px;
+    }
+
+    .status-section{
+        width:100%;
+        justify-content:space-between;
+        gap:10px;
+    }
+
+    .status-item{
+        flex:1;
+    }
+
+    .status-label{
+        font-size:0.8rem;
+    }
+}
+:root{--bg:#0b1220;--card:rgba(255,255,255,.08);--border:rgba(255,255,255,.15);--green:#22c55e;}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:Segoe UI,sans-serif;background:linear-gradient(135deg,#0b1220,#172554);color:#fff;padding:20px}
+.container{max-width:1400px;margin:auto}
+.glass{background:var(--card);backdrop-filter:blur(18px);border:1px solid var(--border);border-radius:20px;box-shadow:0 8px 30px rgba(0,0,0,.3)}
+.header{display:flex;justify-content:space-between;align-items:center;padding:20px;margin-bottom:20px}
+.status-section{display:flex;gap:30px;align-items:center}
+.status-item{display:flex;align-items:center;gap:10px}
+.status-dot{width:16px;height:16px;border-radius:50%;background:red;display:inline-block}
+.status-dot.connected{background:lime;box-shadow:0 0 12px rgba(34,197,94,.8)}
+.status-label{font-size:.9rem;opacity:.8}
+.rooms{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:20px}
+.room{padding:20px;transition:.3s}
+.room.on{border-color:gold;box-shadow:0 0 10px gold,0 0 20px rgba(255,215,0,.7),0 8px 30px rgba(0,0,0,.3)}
+.room.disabled{opacity:.5;pointer-events:none}
+.row{display:flex;justify-content:space-between;align-items:center}
+.switch{position:relative;width:60px;height:30px;display:inline-block}
+.switch input{display:none}
+.slider{position:absolute;inset:0;background:#555;border-radius:50px;cursor:pointer}
+.slider:before{content:'';position:absolute;width:24px;height:24px;background:#fff;left:3px;top:3px;border-radius:50%;transition:.3s}
+input:checked + .slider{background:var(--green)}
+input:checked + .slider:before{transform:translateX(30px)}
+.room-name{background:transparent;border:none;color:#fff;font-size:1.1rem;font-weight:bold;width:150px}
+.settings{margin-top:20px;padding:20px}
+.settings-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:20px}
+input[type=text],input[type=number]{padding:8px;border-radius:8px;border:none;width:100%;margin-top:6px;background:rgba(255,255,255,.1);color:white}
+button{padding:10px 16px;background:var(--green);border:none;border-radius:8px;cursor:pointer;font-weight:bold;width:100%}
+</style>
+</head>
+<body>
+<div class="container">
+
+<div class="header glass">
+<h1>Smart Home Dashboard</h1>
+
+<div class="status-section">
+
+<div class="status-item">
+<div class="status-dot" id="brokerDot"></div>
+<div>
+<div class="status-label">MQTT Broker</div>
+<div id="brokerStatus">Connecting...</div>
+</div>
+</div>
+
+<div style="width:1px;height:40px;background:rgba(255,255,255,.1);"></div>
+
+<div class="status-item">
+<div class="status-dot" id="espDot"></div>
+<div>
+<div class="status-label">Device Status</div>
+<div id="espStatus">Device Offline</div>
+</div>
+</div>
+
+</div>
+</div>
+
+<div class="rooms">
+
+<div class="room glass" id="room-card-bedroom">
+<div class="row">
+<input class="room-name" value="Bedroom">
+<label class="switch">
+<input type="checkbox" id="bedroom-toggle" onchange="toggleRoom('bedroom',this.checked)">
+<span class="slider"></span>
+</label>
+</div><br>Status: <span id="bedroom">OFF</span>
+</div>
+
+<div class="room glass" id="room-card-livingroom">
+<div class="row">
+<input class="room-name" value="Living Room">
+<label class="switch">
+<input type="checkbox" id="livingroom-toggle" onchange="toggleRoom('livingroom',this.checked)">
+<span class="slider"></span>
+</label>
+</div><br>Status: <span id="livingroom">OFF</span>
+</div>
+
+<div class="room glass" id="room-card-kitchen">
+<div class="row">
+<input class="room-name" value="Kitchen">
+<label class="switch">
+<input type="checkbox" id="kitchen-toggle" onchange="toggleRoom('kitchen',this.checked)">
+<span class="slider"></span>
+</label>
+</div><br>Status: <span id="kitchen">OFF</span>
+</div>
+
+<div class="room glass" id="room-card-garage">
+<div class="row">
+<input class="room-name" value="Garage">
+<label class="switch">
+<input type="checkbox" id="garage-toggle" onchange="toggleRoom('garage',this.checked)">
+<span class="slider"></span>
+</label>
+</div><br>Status: <span id="garage">OFF</span>
+</div>
+
+</div>
+
+<div class="settings glass">
+<h3>Broker Settings</h3>
+<div class="settings-row">
+<div>
+<label>Broker URL</label>
+<input type="text" id="broker" value="wss://broker.hivemq.com">
+</div>
+<div>
+<label>Port</label>
+<input type="number" id="port" value="8884">
+</div>
+</div>
+<button onclick="connectBroker()" style="margin-top:15px">Reconnect Broker</button>
+</div>
+
+</div>
+
+<script>
+let client;
+let lastHeartbeatTime = 0;
+
+function enableAllControls(){
+['bedroom','livingroom','kitchen','garage'].forEach(room=>{
+document.getElementById(room+'-toggle').disabled=false;
+document.getElementById('room-card-'+room).classList.remove('disabled');
+});
+}
+
+function disableAllControls(){
+['bedroom','livingroom','kitchen','garage'].forEach(room=>{
+document.getElementById(room+'-toggle').disabled=true;
+document.getElementById('room-card-'+room).classList.add('disabled');
+});
+}
+
+function checkESPStatus(){
+const espDot=document.getElementById('espDot');
+const espStatus=document.getElementById('espStatus');
+
+if((Date.now()-lastHeartbeatTime)<15000){
+espDot.classList.add('connected');
+espStatus.textContent='Device Online';
+enableAllControls();
+}else{
+espDot.classList.remove('connected');
+espStatus.textContent='Device Offline';
+disableAllControls();
+}
+}
+
+setInterval(checkESPStatus,1000);
+
+function connectBroker(){
+
+const broker=document.getElementById('broker').value;
+const port=document.getElementById('port').value;
+
+if(client){
+try{client.end();}catch(e){}
+}
+
+client=mqtt.connect(`${broker}:${port}/mqtt`);
+
+client.on('connect',()=>{
+document.getElementById('brokerDot').classList.add('connected');
+document.getElementById('brokerStatus').textContent='Connected';
+
+client.subscribe('addyhome/status');
+client.subscribe('addyhome/+/light/status');
+
+lastHeartbeatTime=0;
+});
+
+client.on('message',(topic,message)=>{
+
+const msg=message.toString();
+
+if(topic==='addyhome/status'){
+lastHeartbeatTime=Date.now();
+return;
+}
+
+if(topic.includes('/light/status')){
+
+const room=topic.split('/')[1];
+
+document.getElementById(room).innerText=msg.toUpperCase();
+
+const sw=document.getElementById(room+'-toggle');
+if(sw) sw.checked=(msg.toUpperCase()==='ON');
+
+const card=document.getElementById('room-card-'+room);
+
+if(msg.toUpperCase()==='ON')
+card.classList.add('on');
+else
+card.classList.remove('on');
+}
+});
+
+client.on('close',()=>{
+document.getElementById('brokerDot').classList.remove('connected');
+document.getElementById('brokerStatus').textContent='Disconnected';
+});
+
+client.on('error',()=>{
+document.getElementById('brokerStatus').textContent='Error';
+});
+}
+
+function toggleRoom(room,state){
+
+if(!client || !client.connected){
+document.getElementById(room+'-toggle').checked=!state;
+return;
+}
+
+client.publish(
+'addyhome/'+room+'/light',
+JSON.stringify({state: state ? 1 : 0})
+);
+}
+
+window.addEventListener('load',connectBroker);
+</script>
+
+</body>
+</html>
