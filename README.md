@@ -118,11 +118,11 @@ For detailed topic documentation, see MQTT_TOPICS.md.
 
 ### Main Dashboard
 
-![Dashboard](docs/images/pc_dashboard.png)
+![Dashboard](docs/images/pc_dashboard.PNG)
 
 ### Mobile View
 
-![Mobile Dashboard](docs/images/mobile_dashboard.jpg)
+![Mobile Dashboard](docs/images/mobil_dashboard.jpg)
 
 > Update the filenames above to match the actual images in `docs/images`.
 
