@@ -1,4 +1,4 @@
-# Smart Home Dashboard
+# Smart Home Project
 
 A lightweight MQTT-based Smart Home Automation system built using ESP32, MQTT, and a responsive web dashboard.
 
